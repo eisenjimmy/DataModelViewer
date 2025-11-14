@@ -1,0 +1,67 @@
+@using SchemaDiagramViewer.Models
+@inject IJSRuntime JSRuntime
+
+<div class="view-box absolute cursor-move bg-white border border-gray-200 rounded shadow-sm hover:shadow transition-all duration-200"
+     style="left: @($"{View.X}px"); top: @($"{View.Y}px"); min-width: 200px; max-width: 260px; z-index: 10;"
+     draggable="true"
+     data-view-name="@View.FullName"
+     @ondragstart="HandleDragStart"
+     @ondragend="HandleDragEnd"
+     @onmousedown="HandleMouseDown">
+    
+    <!-- Compact Header -->
+    <div class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-2.5 py-1.5 border-b border-teal-700">
+        <div class="font-medium text-xs tracking-wide leading-tight">@View.FullName</div>
+        <div class="text-[10px] text-emerald-100 font-light leading-tight">VIEW</div>
+    </div>
+    
+    <!-- Compact Field List -->
+    <div class="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+        @foreach (var column in View.Columns)
+        {
+            <div class="px-2.5 py-0.5 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex-1 min-w-0 flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-gray-900 truncate">
+                            @column.Name
+                        </span>
+                        @if (!column.IsNullable)
+                        {
+                            <span class="text-red-500 text-[10px] font-semibold" title="Not Null">*</span>
+                        }
+                    </div>
+                    <div class="flex-shrink-0 text-right">
+                        <span class="text-[10px] text-gray-600 font-mono">
+                            @column.DataType@(column.MaxLength.HasValue ? $"({column.MaxLength})" : (column.DataType.ToLower().Contains("char") || column.DataType.ToLower().Contains("binary") ? "(max)" : ""))
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public View View { get; set; } = null!;
+    
+    private bool isDragging = false;
+
+    private void HandleDragStart(DragEventArgs e)
+    {
+        isDragging = true;
+    }
+
+    private async Task HandleDragEnd(DragEventArgs e)
+    {
+        if (isDragging)
+        {
+            isDragging = false;
+        }
+    }
+
+    private void HandleMouseDown(MouseEventArgs e)
+    {
+        // This will be handled by JavaScript for better drag experience
+    }
+}
+

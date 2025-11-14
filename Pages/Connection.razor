@@ -1,0 +1,216 @@
+@page "/connection"
+@using SchemaDiagramViewer.Services
+@using Microsoft.Data.SqlClient
+@using System.ComponentModel.DataAnnotations
+@inject DatabaseConnectionService ConnectionService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Database Connection</PageTitle>
+
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-2xl mx-auto py-12 px-4">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Connect to SQL Server</h1>
+            
+            <EditForm Model="@connectionModel" OnValidSubmit="@HandleConnect">
+                <DataAnnotationsValidator />
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Server Name</label>
+                        <InputText @bind-Value="connectionModel.Server" @bind-Value:after="OnServerChanged" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" placeholder="localhost or server\instance" />
+                        <ValidationMessage For="@(() => connectionModel.Server)" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Authentication</label>
+                        <div class="flex items-center space-x-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="auth" checked="@connectionModel.UseWindowsAuth" @onchange="@(() => connectionModel.UseWindowsAuth = true)" class="mr-2" />
+                                <span>Windows Authentication</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="auth" checked="@(!connectionModel.UseWindowsAuth)" @onchange="@(() => connectionModel.UseWindowsAuth = false)" class="mr-2" />
+                                <span>SQL Server Authentication</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (!connectionModel.UseWindowsAuth)
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                            <InputText @bind-Value="connectionModel.Username" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <InputText type="password" @bind-Value="connectionModel.Password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" />
+                        </div>
+                    }
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Database</label>
+                        <InputSelect @bind-Value="connectionModel.Database" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue">
+                            <option value="">Select database...</option>
+                            @foreach (var db in databases)
+                            {
+                                <option value="@db">@db</option>
+                            }
+                        </InputSelect>
+                        <button type="button" @onclick="LoadDatabases" class="mt-2 text-sm text-office-blue hover:underline" disabled="@isLoadingDatabases">
+                            @if (isLoadingDatabases)
+                            {
+                                <span>Loading...</span>
+                            }
+                            else
+                            {
+                                <span>Refresh Databases</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                            @errorMessage
+                        </div>
+                    }
+
+                    <div class="flex space-x-3 pt-4">
+                        <button type="submit" class="px-4 py-2 bg-office-blue text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-office-blue focus:ring-offset-2" disabled="@isConnecting">
+                            @if (isConnecting)
+                            {
+                                <span>Connecting...</span>
+                            }
+                            else
+                            {
+                                <span>Connect</span>
+                            }
+                        </button>
+                        <button type="button" @onclick="LoadDatabases" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2" disabled="@isLoadingDatabases">
+                            Test Connection
+                        </button>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ConnectionModel connectionModel = new();
+    private List<string> databases = new();
+    private string? errorMessage;
+    private bool isConnecting;
+    private bool isLoadingDatabases;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Don't load databases on initial load - wait for server name to be entered
+    }
+
+    private async Task OnServerChanged()
+    {
+        // Clear databases when server changes
+        databases.Clear();
+        connectionModel.Database = null;
+        errorMessage = null;
+        StateHasChanged();
+        
+        // Only load if server name is not empty
+        if (!string.IsNullOrWhiteSpace(connectionModel.Server))
+        {
+            await LoadDatabases();
+        }
+    }
+
+    private async Task LoadDatabases()
+    {
+        if (string.IsNullOrWhiteSpace(connectionModel.Server))
+        {
+            errorMessage = "Please enter a server name first.";
+            return;
+        }
+
+        isLoadingDatabases = true;
+        errorMessage = null;
+        
+        try
+        {
+            databases = await ConnectionService.GetDatabasesAsync(
+                connectionModel.Server,
+                connectionModel.Username,
+                connectionModel.Password,
+                connectionModel.UseWindowsAuth
+            );
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoadingDatabases = false;
+        }
+    }
+
+    private async Task HandleConnect()
+    {
+        if (string.IsNullOrWhiteSpace(connectionModel.Database))
+        {
+            errorMessage = "Please select a database.";
+            return;
+        }
+
+        isConnecting = true;
+        errorMessage = null;
+
+        try
+        {
+            var success = await ConnectionService.TestConnectionAsync(
+                connectionModel.Server,
+                connectionModel.Database,
+                connectionModel.Username,
+                connectionModel.Password,
+                connectionModel.UseWindowsAuth
+            );
+
+            if (success)
+            {
+                // Store connection info in session/localStorage
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbServer", connectionModel.Server);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbDatabase", connectionModel.Database);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUsername", connectionModel.Username ?? "");
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbPassword", connectionModel.Password ?? "");
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUseWindowsAuth", connectionModel.UseWindowsAuth.ToString());
+                
+                Navigation.NavigateTo("/diagram");
+            }
+            else
+            {
+                errorMessage = "Connection failed. Please check your credentials.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isConnecting = false;
+        }
+    }
+
+    public class ConnectionModel
+    {
+        [Required(ErrorMessage = "Server name is required")]
+        public string Server { get; set; } = "localhost";
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public bool UseWindowsAuth { get; set; } = true;
+        public string? Database { get; set; }
+    }
+}
+

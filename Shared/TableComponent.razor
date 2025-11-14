@@ -1,0 +1,75 @@
+@using SchemaDiagramViewer.Models
+@inject IJSRuntime JSRuntime
+
+<div class="table-box absolute cursor-move bg-white border border-gray-200 rounded shadow-sm hover:shadow transition-all duration-200"
+     style="left: @($"{Table.X}px"); top: @($"{Table.Y}px"); min-width: 200px; max-width: 260px; z-index: 10;"
+     draggable="true"
+     data-table-name="@Table.FullName"
+     @ondragstart="HandleDragStart"
+     @ondragend="HandleDragEnd"
+     @onmousedown="HandleMouseDown">
+    
+    <!-- Compact Header -->
+    <div class="bg-gradient-to-r from-office-blue to-blue-600 text-white px-2.5 py-1.5 border-b border-blue-700">
+        <div class="font-medium text-xs tracking-wide leading-tight">@Table.FullName</div>
+        <div class="text-[10px] text-blue-100 font-light leading-tight">TABLE</div>
+    </div>
+    
+    <!-- Compact Field List -->
+    <div class="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+        @foreach (var column in Table.Columns)
+        {
+            <div class="px-2.5 py-0.5 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex-1 min-w-0 flex items-center gap-2">
+                        @if (column.IsPrimaryKey)
+                        {
+                            <!-- Badge style PK to avoid clipping and improve legibility -->
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-office-blue text-white text-[10px] font-semibold leading-none" title="Primary Key">PK</span>
+                        }
+                        <span class="text-xs font-medium text-gray-900 truncate @(column.IsPrimaryKey ? "text-office-blue" : "")">
+                            @column.Name
+                        </span>
+                        @if (!column.IsNullable)
+                        {
+                            <span class="text-red-500 text-[10px] font-semibold" title="Not Null">*</span>
+                        }
+                    </div>
+                    <div class="flex-shrink-0 text-right">
+                        <span class="text-[10px] text-gray-600 font-mono">
+                            @column.DataType@(column.MaxLength.HasValue ? $"({column.MaxLength})" : (column.DataType.ToLower().Contains("char") || column.DataType.ToLower().Contains("binary") ? "(max)" : ""))
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Table Table { get; set; } = null!;
+    
+    private bool isDragging = false;
+    private double startX, startY;
+    private double offsetX, offsetY;
+
+    private void HandleDragStart(DragEventArgs e)
+    {
+        isDragging = true;
+    }
+
+    private async Task HandleDragEnd(DragEventArgs e)
+    {
+        if (isDragging)
+        {
+            isDragging = false;
+            // Position will be updated via JavaScript
+        }
+    }
+
+    private void HandleMouseDown(MouseEventArgs e)
+    {
+        // This will be handled by JavaScript for better drag experience
+    }
+}
+

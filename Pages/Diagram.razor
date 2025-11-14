@@ -1,0 +1,422 @@
+@page "/diagram"
+@using SchemaDiagramViewer.Models
+@using SchemaDiagramViewer.Services
+@using Microsoft.Data.SqlClient
+@inject DatabaseConnectionService ConnectionService
+@inject SchemaReaderService SchemaReader
+@inject DiagramService DiagramService
+@inject PdfExportService PdfService
+@inject SchemaDiagramViewer.Services.ExportSettingsService ExportSettings
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Schema Diagram</PageTitle>
+
+<style>
+    /* Compact, tasteful toolbar */
+    .toolbar {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        padding:6px 10px;
+        background:white;
+        border-bottom:1px solid #E5E7EB;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+        font-size:0.95rem;
+    }
+
+    .toolbar .group { display:flex; gap:6px; align-items:center; }
+
+    .toolbar-btn {
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:6px 8px;
+        color:#374151;
+        background:transparent;
+        border-radius:6px;
+        border:0;
+    }
+    .toolbar-btn:hover { background:#F3F4F6; color:#111827; cursor:pointer; }
+
+    .toolbar-icon {
+        width:16px;
+        height:16px;
+        fill:#6B7280; /* gray */
+        flex-shrink:0;
+    }
+
+    .toolbar-label { font-size:0.85rem; }
+
+    /* Modal */
+    .modal-backdrop {
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,0.45);
+        z-index:50;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    .modal {
+        background:white;
+        border-radius:8px;
+        width:520px;
+        max-width:calc(100% - 32px);
+        padding:16px;
+        box-shadow:0 10px 30px rgba(0,0,0,0.12);
+        z-index:60;
+    }
+    .modal .row { display:flex; gap:8px; margin-bottom:8px; }
+    .modal label { font-size:12px; color:#374151; display:block; margin-bottom:4px; }
+    .modal input, .modal select { width:100%; padding:8px; border:1px solid #E5E7EB; border-radius:6px; }
+    .modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+    .btn-primary { background:#0f62fe; color:white; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+    .btn-secondary { background:#f3f4f6; color:#111827; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+</style>
+
+<div class="h-screen flex flex-col bg-gray-50">
+    <!-- Compact Toolbar -->
+    <div class="toolbar">
+        <div class="group">
+            <button @onclick="GoToConnection" class="toolbar-btn" title="Back">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="toolbar-label">Back</span>
+            </button>
+
+            <button @onclick="LoadSchema" class="toolbar-btn" title="Refresh">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="toolbar-label">Refresh</span>
+            </button>
+        </div>
+
+        <div style="flex:1"></div>
+
+        <div class="group">
+            <button @onclick="SaveDiagram" class="toolbar-btn" title="Save">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 7h10v6H7z" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
+                <span class="toolbar-label">Save</span>
+            </button>
+
+            <button @onclick="LoadDiagram" class="toolbar-btn" title="Load">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h5l2 3h11v9H3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="toolbar-label">Load</span>
+            </button>
+
+            <button @onclick="ExportPdf" class="toolbar-btn" title="Export PDF">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+                <span class="toolbar-label">PDF</span>
+            </button>
+
+            <!-- open settings modal -->
+            <button @onclick="OpenSettingsModal" class="toolbar-btn" title="Export Settings">
+                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 2.28 18.3l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09c.67 0 1.22-.41 1.51-1a1.65 1.65 0 0 0-.33-1.82L4.04 6.7A2 2 0 1 1 6.88 3.87l.06.06c.48.48 1.2.57 1.82.33.58-.22 1.24-.22 1.82 0 .62.24 1.34.15 1.82-.33l.06-.06A2 2 0 1 1 17.12 6.7l-.06.06c-.48.48-.57 1.2-.33 1.82.22.58.22 1.24 0 1.82-.24.62-.15 1.34.33 1.82l.06.06A2 2 0 1 1 20.12 11h-.09c-.67 0-1.22.41-1.51 1-.22.58-.22 1.24 0 1.82z" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+                <span class="toolbar-label">Settings</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Diagram Canvas (unchanged) -->
+    <div class="flex-1 overflow-hidden relative" id="diagram-container">
+        <div class="absolute inset-0 overflow-auto bg-gray-50" style="background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px); background-size: 24px 24px;">
+            <svg id="relationships-svg" class="absolute inset-0 pointer-events-none" style="z-index: 1;">
+                @foreach (var rel in schema?.Relationships ?? new List<Relationship>())
+                {
+                    <line x1="0" y1="0" x2="0" y2="0" 
+                          stroke="#94a3b8" 
+                          stroke-width="1.5" 
+                          stroke-dasharray="4,4"
+                          marker-end="url(#arrowhead)"
+                          data-from="@rel.FromTable" 
+                          data-to="@rel.ToTable"
+                          class="relationship-line opacity-60" />
+                }
+                <defs>
+                    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                        <path d="M 0 0 L 8 4 L 0 8 Z" fill="#94a3b8" opacity="0.6" />
+                    </marker>
+                </defs>
+            </svg>
+            
+            <div id="diagram-items" class="relative" style="z-index: 2;">
+                @if (schema != null)
+                {
+                    @foreach (var table in schema.Tables)
+                    {
+                        <TableComponent Table="@table" />
+                    }
+                    @foreach (var view in schema.Views)
+                    {
+                        <ViewComponent View="@view" />
+                    }
+                }
+                else if (isLoading)
+                {
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-office-blue mx-auto mb-4"></div>
+                            <p class="text-gray-600">Loading schema...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <p class="text-gray-600 mb-4">No schema loaded. Please connect to a database.</p>
+                            <button @onclick="GoToConnection" class="px-4 py-2 bg-office-blue text-white rounded hover:bg-blue-600">
+                                Connect to Database
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<InputFile OnChange="HandleFileSelected" accept=".diagram" class="hidden" id="diagram-file-input" />
+
+@if (showSettingsModal)
+{
+    <div class="modal-backdrop" @onclick="CloseSettingsModal">
+        <div class="modal" @onclick:stopPropagation>
+            <h3 style="margin:0 0 8px 0">PDF Export Settings</h3>
+
+            <div class="row">
+                <div style="flex:1">
+                    <label>Preset</label>
+                    <select @bind="modalPreset">
+                        <option value="CP Custom">CP Custom (32 x 36)</option>
+                        <option value="Letter">Letter (8 x 11.5)</option>
+                        <option value="Custom">Custom</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div style="flex:1">
+                    <label>Width (in)</label>
+                    <input type="number" step="0.1" @bind="modalWidth" />
+                </div>
+                <div style="flex:1">
+                    <label>Height (in)</label>
+                    <input type="number" step="0.1" @bind="modalHeight" />
+                </div>
+            </div>
+
+            <div class="row">
+                <div style="flex:1">
+                    <label>Document name</label>
+                    <input @bind="modalDocName" />
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn-secondary" @onclick="CloseSettingsModal">Cancel</button>
+                <button class="btn-primary" @onclick="SaveSettings">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DatabaseSchema? schema;
+    private bool isLoading;
+    private DotNetObjectReference<Diagram>? dotNetRef;
+
+    // modal state
+    private bool showSettingsModal;
+    private string modalPreset = "CP Custom";
+    private float modalWidth = 32f;
+    private float modalHeight = 36f;
+    private string modalDocName = "Data Model";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (dotNetRef != null)
+            {
+                await JSRuntime.InvokeVoidAsync("setDotNetRef", dotNetRef);
+            }
+            await LoadSchema();
+        }
+        
+        if (schema != null)
+        {
+            await Task.Delay(100); // Wait for DOM to update
+            await UpdateRelationshipLines();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    private void OpenSettingsModal()
+    {
+        var s = ExportSettings.Settings;
+        modalPreset = s.Preset;
+        modalWidth = s.WidthInches;
+        modalHeight = s.HeightInches;
+        modalDocName = s.DocumentName ?? "Data Model";
+        showSettingsModal = true;
+    }
+
+    private void CloseSettingsModal()
+    {
+        showSettingsModal = false;
+    }
+
+    private void SaveSettings()
+    {
+        ExportSettings.Settings.ApplyPreset(modalPreset);
+        ExportSettings.Settings.WidthInches = modalWidth;
+        ExportSettings.Settings.HeightInches = modalHeight;
+        ExportSettings.Settings.DocumentName = string.IsNullOrWhiteSpace(modalDocName) ? "Data Model" : modalDocName.Trim();
+        showSettingsModal = false;
+    }
+
+    private async Task LoadSchema()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var server = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dbServer");
+            var database = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dbDatabase");
+            var username = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dbUsername");
+            var password = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dbPassword");
+            var useWindowsAuthStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dbUseWindowsAuth");
+            var useWindowsAuth = bool.Parse(useWindowsAuthStr ?? "true");
+
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(database))
+            {
+                Navigation.NavigateTo("/connection");
+                return;
+            }
+
+            var connection = ConnectionService.CreateConnection(server, database, 
+                string.IsNullOrEmpty(username) ? null : username,
+                string.IsNullOrEmpty(password) ? null : password,
+                useWindowsAuth);
+
+            schema = await SchemaReader.ReadSchemaAsync(connection);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading schema: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveDiagram()
+    {
+        if (schema == null) return;
+
+        var diagramData = DiagramService.SerializeDiagram(schema);
+        var fileName = $"schema-{DateTime.Now:yyyyMMdd-HHmmss}.diagram";
+        await JSRuntime.InvokeVoidAsync("downloadFile", fileName, diagramData);
+    }
+
+    private async Task LoadDiagram()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "(() => { const el = document.getElementById('diagram-file-input'); if (el) el.click(); })();");
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        if (e.File != null)
+        {
+            using var stream = e.File.OpenReadStream();
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            
+            schema = DiagramService.DeserializeDiagram(content);
+            await UpdateRelationshipLines();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportPdf()
+    {
+        if (schema == null) return;
+
+        try
+        {
+            var settings = ExportSettings.Settings;
+            float w = settings.WidthInches;
+            float h = settings.HeightInches;
+            string docName = string.IsNullOrWhiteSpace(settings.DocumentName) ? "Data Model" : settings.DocumentName;
+            var pdfBytes = PdfService.GeneratePdf(schema, w, h, docName, DateTime.Now);
+            var fileName = $"{docName}-{DateTime.Now:yyyyMMdd-HHmmss}.pdf";
+            await JSRuntime.InvokeVoidAsync("downloadPdf", fileName, Convert.ToBase64String(pdfBytes));
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error generating PDF: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateRelationshipLines()
+    {
+        await JSRuntime.InvokeVoidAsync("updateRelationshipLines");
+    }
+
+    private void GoToConnection()
+    {
+        Navigation.NavigateTo("/connection");
+    }
+
+    [JSInvokable]
+    public void UpdateTablePosition(string tableName, double x, double y)
+    {
+        if (schema != null)
+        {
+            var table = schema.Tables.FirstOrDefault(t => t.FullName == tableName);
+            if (table != null)
+            {
+                table.X = x;
+                table.Y = y;
+                InvokeAsync(async () =>
+                {
+                    await UpdateRelationshipLines();
+                    StateHasChanged();
+                });
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateViewPosition(string viewName, double x, double y)
+    {
+        if (schema != null)
+        {
+            var view = schema.Views.FirstOrDefault(v => v.FullName == viewName);
+            if (view != null)
+            {
+                view.X = x;
+                view.Y = y;
+                InvokeAsync(async () =>
+                {
+                    await UpdateRelationshipLines();
+                    StateHasChanged();
+                });
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        dotNetRef?.Dispose();
+    }
+}
+

@@ -1,0 +1,55 @@
+@page "/settings"
+@inject SchemaDiagramViewer.Services.ExportSettingsService SettingsService
+
+<h3>PDF Export Settings</h3>
+
+<div class="mb-3">
+    <label class="form-label">Preset</label>
+    <select class="form-select" @bind="preset">
+        <option value="CP Custom">CP Custom (32 x 36)</option>
+        <option value="Letter">Letter (8 x 11.5)</option>
+        <option value="Custom">Custom</option>
+    </select>
+</div>
+
+<div class="row mb-3">
+    <div class="col">
+        <label class="form-label">Width (in)</label>
+        <input class="form-control" type="number" step="0.1" @bind="width" />
+    </div>
+    <div class="col">
+        <label class="form-label">Height (in)</label>
+        <input class="form-control" type="number" step="0.1" @bind="height" />
+    </div>
+</div>
+
+<div class="mb-3">
+    <label class="form-label">Document name</label>
+    <input class="form-control" @bind="docName" />
+</div>
+
+<button class="btn btn-primary" @onclick="Save">Save</button>
+
+@code {
+    private string preset;
+    private float width;
+    private float height;
+    private string docName = "";
+
+    protected override void OnInitialized()
+    {
+        var s = SettingsService.Settings;
+        preset = s.Preset;
+        width = s.WidthInches;
+        height = s.HeightInches;
+        docName = s.DocumentName;
+    }
+
+    private void Save()
+    {
+        SettingsService.Settings.ApplyPreset(preset);
+        SettingsService.Settings.WidthInches = width;
+        SettingsService.Settings.HeightInches = height;
+        SettingsService.Settings.DocumentName = docName?.Trim() ?? "Data Model";
+    }
+}

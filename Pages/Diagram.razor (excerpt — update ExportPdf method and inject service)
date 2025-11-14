@@ -1,0 +1,24 @@
+@inject SchemaDiagramViewer.Services.ExportSettingsService ExportSettings
+@inject SchemaDiagramViewer.Services.PdfExportService PdfService
+@inject IJSRuntime JSRuntime
+
+@code {
+    private async Task ExportPdf()
+    {
+        if (schema == null) return;
+        try
+        {
+            var settings = ExportSettings.Settings;
+            float w = settings.WidthInches;
+            float h = settings.HeightInches;
+            string docName = string.IsNullOrWhiteSpace(settings.DocumentName) ? "Data Model" : settings.DocumentName;
+            var pdfBytes = PdfService.GeneratePdf(schema, w, h, docName, DateTime.Now);
+            var fileName = $"{docName}-{DateTime.Now:yyyyMMdd-HHmmss}.pdf";
+            await JSRuntime.InvokeVoidAsync("downloadPdf", fileName, Convert.ToBase64String(pdfBytes));
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error generating PDF: {ex.Message}");
+        }
+    }
+}
