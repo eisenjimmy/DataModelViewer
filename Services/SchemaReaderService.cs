@@ -17,6 +17,8 @@ public class SchemaReaderService
             schema.Tables = await ReadTablesAsync(connection);
             schema.Views = await ReadViewsAsync(connection);
             schema.Relationships = await ReadRelationshipsAsync(connection, schema.Tables);
+            schema.StoredProcedures = await ReadStoredProceduresAsync(connection);
+            schema.Functions = await ReadFunctionsAsync(connection);
             
             // Set initial positions in a grid layout
             SetInitialPositions(schema);
@@ -235,5 +237,52 @@ public class SchemaReaderService
             index++;
         }
     }
-}
 
+    private async Task<List<StoredProcedure>> ReadStoredProceduresAsync(SqlConnection connection)
+    {
+        var sps = new List<StoredProcedure>();
+        var query = @"
+            SELECT ROUTINE_SCHEMA, ROUTINE_NAME 
+            FROM INFORMATION_SCHEMA.ROUTINES 
+            WHERE ROUTINE_TYPE = 'PROCEDURE' 
+            ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME";
+
+        using var command = new SqlCommand(query, connection);
+        using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            sps.Add(new StoredProcedure
+            {
+                Schema = reader.GetString(0),
+                Name = reader.GetString(1)
+            });
+        }
+
+        return sps;
+    }
+
+    private async Task<List<DatabaseFunction>> ReadFunctionsAsync(SqlConnection connection)
+    {
+        var funcs = new List<DatabaseFunction>();
+        var query = @"
+            SELECT ROUTINE_SCHEMA, ROUTINE_NAME 
+            FROM INFORMATION_SCHEMA.ROUTINES 
+            WHERE ROUTINE_TYPE = 'FUNCTION' 
+            ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME";
+
+        using var command = new SqlCommand(query, connection);
+        using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            funcs.Add(new DatabaseFunction
+            {
+                Schema = reader.GetString(0),
+                Name = reader.GetString(1)
+            });
+        }
+
+        return funcs;
+    }
+}

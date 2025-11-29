@@ -1,0 +1,82 @@
+@using SchemaDiagramViewer.Models
+
+<div class="absolute cursor-move group label-box @(IsSelected ? "selected" : "")"
+     style="left: @(Label.X)px; top: @(Label.Y)px; width: @(Label.Width)px; height: @(Label.Height)px; z-index: @Label.ZIndex;"
+     data-label-id="@Label.Id"
+     @oncontextmenu="HandleContextMenu"
+     @oncontextmenu:preventDefault
+     @oncontextmenu:stopPropagation
+     @onmousedown="OnMouseDown"
+     @onmousedown:stopPropagation>
+    
+    @if (isEditing)
+    {
+        <textarea @ref="inputElement"
+               value="@Label.Text"
+               @onchange="OnTextChanged"
+               @onblur="StopEditing"
+               class="w-full h-full px-2 py-1 text-sm border border-blue-500 rounded shadow-sm focus:outline-none bg-white dark:bg-gray-800 dark:text-gray-200 resize-none"
+               autoFocus></textarea>
+    }
+    else
+    {
+        <div class="w-full h-full px-2 py-1 text-sm rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 @Label.Color dark:bg-opacity-20 dark:text-gray-200 shadow-sm transition-colors overflow-hidden"
+             @ondblclick="StartEditing">
+            @Label.Text
+        </div>
+    }
+    <div class="resize-handle se" data-handle="se" style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; background: transparent;"></div>
+</div>
+
+@code {
+    [Parameter] public DiagramLabel Label { get; set; } = new();
+    [Parameter] public EventCallback<DiagramLabel> OnLabelChanged { get; set; }
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnContextMenu { get; set; }
+
+    private bool isEditing = false;
+    private bool shouldFocus = false;
+    private ElementReference inputElement;
+
+    private void StartEditing()
+    {
+        isEditing = true;
+        shouldFocus = true;
+    }
+
+    private async Task StopEditing()
+    {
+        isEditing = false;
+        await OnLabelChanged.InvokeAsync(Label);
+    }
+
+    private void OnTextChanged(ChangeEventArgs e)
+    {
+        Label.Text = e.Value?.ToString() ?? "";
+    }
+
+    private void OnMouseDown(MouseEventArgs e)
+    {
+        if (e.Detail == 2)
+        {
+            StartEditing();
+        }
+    }
+
+    private async Task HandleContextMenu(MouseEventArgs e)
+    {
+        if (OnContextMenu.HasDelegate)
+        {
+            await OnContextMenu.InvokeAsync(e);
+        }
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldFocus && isEditing)
+        {
+            shouldFocus = false;
+            await inputElement.FocusAsync();
+        }
+    }
+}

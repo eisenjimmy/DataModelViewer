@@ -8,183 +8,197 @@
 
 <PageTitle>Database Connection</PageTitle>
 
-<div class="min-h-screen bg-gray-50">
-    <div class="max-w-2xl mx-auto py-12 px-4">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <h1 class="text-2xl font-semibold text-gray-900 mb-6">Connect to SQL Server</h1>
-            
-            <EditForm Model="@connectionModel" OnValidSubmit="@HandleConnect">
-                <DataAnnotationsValidator />
+<div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 relative overflow-hidden">
+    <div id="particles-js" class="absolute inset-0 z-0"></div>
+    
+    <div class="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden transform transition-all hover:scale-[1.01] z-10 relative">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-center">
+            <h2 class="text-2xl font-bold text-white mb-1">Connect to Database</h2>
+            <p class="text-blue-100 text-sm">Enter your SQL Server details below</p>
+        </div>
+        
+        <div class="p-8 space-y-6">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Server</label>
+                    <div class="flex gap-2">
+                        <input @bind="server" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors" placeholder="localhost or server\instance" />
+                        <button @onclick="LoadDatabases" class="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-200 transition-colors" title="Load Databases">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </button>
+                    </div>
+                </div>
                 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Server Name</label>
-                        <InputText @bind-Value="connectionModel.Server" @bind-Value:after="OnServerChanged" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" placeholder="localhost or server\instance" />
-                        <ValidationMessage For="@(() => connectionModel.Server)" />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Authentication</label>
-                        <div class="flex items-center space-x-4">
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" name="auth" checked="@connectionModel.UseWindowsAuth" @onchange="@(() => connectionModel.UseWindowsAuth = true)" class="mr-2" />
-                                <span>Windows Authentication</span>
-                            </label>
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" name="auth" checked="@(!connectionModel.UseWindowsAuth)" @onchange="@(() => connectionModel.UseWindowsAuth = false)" class="mr-2" />
-                                <span>SQL Server Authentication</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    @if (!connectionModel.UseWindowsAuth)
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Database</label>
+                    @if (databases.Any())
                     {
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                            <InputText @bind-Value="connectionModel.Username" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" />
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                            <InputText type="password" @bind-Value="connectionModel.Password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue" />
-                        </div>
-                    }
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Database</label>
-                        <InputSelect @bind-Value="connectionModel.Database" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-office-blue">
-                            <option value="">Select database...</option>
+                        <select @bind="database" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors">
+                            <option value="">-- Select Database --</option>
                             @foreach (var db in databases)
                             {
                                 <option value="@db">@db</option>
                             }
-                        </InputSelect>
-                        <button type="button" @onclick="LoadDatabases" class="mt-2 text-sm text-office-blue hover:underline" disabled="@isLoadingDatabases">
-                            @if (isLoadingDatabases)
-                            {
-                                <span>Loading...</span>
-                            }
-                            else
-                            {
-                                <span>Refresh Databases</span>
-                            }
-                        </button>
-                    </div>
-
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                            @errorMessage
-                        </div>
+                        </select>
                     }
-
-                    <div class="flex space-x-3 pt-4">
-                        <button type="submit" class="px-4 py-2 bg-office-blue text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-office-blue focus:ring-offset-2" disabled="@isConnecting">
-                            @if (isConnecting)
-                            {
-                                <span>Connecting...</span>
-                            }
-                            else
-                            {
-                                <span>Connect</span>
-                            }
-                        </button>
-                        <button type="button" @onclick="LoadDatabases" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2" disabled="@isLoadingDatabases">
-                            Test Connection
-                        </button>
-                    </div>
+                    else
+                    {
+                        <input @bind="database" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors" placeholder="DatabaseName" />
+                    }
                 </div>
-            </EditForm>
+                
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="windowsAuth" @bind="useWindowsAuth" class="rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
+                    <label for="windowsAuth" class="text-sm text-gray-700 dark:text-gray-300 select-none">Use Windows Authentication</label>
+                </div>
+
+                @if (!useWindowsAuth)
+                {
+                    <div class="grid grid-cols-2 gap-4 animate-fade-in">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                            <input @bind="username" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                            <input @bind="password" type="password" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm flex items-start gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span>@errorMessage</span>
+                </div>
+            }
+
+            <button @onclick="Connect" disabled="@isLoading" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                @if (isLoading)
+                {
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Connecting...</span>
+                }
+                else
+                {
+                    <span>Connect</span>
+                }
+            </button>
+            
+            <div class="text-center mt-4">
+                <button @onclick="LoadDemoDatabase" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    Try with demo database
+                </button>
+            </div>
+            
+            <div class="text-xs text-gray-500 dark:text-gray-400 text-center space-y-2 mt-4 border-t pt-4 dark:border-gray-700">
+                <p class="font-medium text-amber-600 dark:text-amber-500">
+                    <span class="font-bold">Security Note:</span> Please provide a SQL user with <span class="underline">Read-Only</span> access.
+                </p>
+                <p>
+                    We do not collect or store any credentials or schema data externally. Everything runs locally on your machine.
+                </p>
+            </div>
         </div>
     </div>
 </div>
 
 @code {
-    private ConnectionModel connectionModel = new();
-    private List<string> databases = new();
+    private string server = "localhost";
+    private string? database;
+    private string? username;
+    private string? password;
+    private bool useWindowsAuth = true;
     private string? errorMessage;
-    private bool isConnecting;
-    private bool isLoadingDatabases;
+    private bool isLoading;
+    private List<string> databases = new();
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Don't load databases on initial load - wait for server name to be entered
-    }
-
-    private async Task OnServerChanged()
-    {
-        // Clear databases when server changes
-        databases.Clear();
-        connectionModel.Database = null;
-        errorMessage = null;
-        StateHasChanged();
-        
-        // Only load if server name is not empty
-        if (!string.IsNullOrWhiteSpace(connectionModel.Server))
+        if (firstRender)
         {
-            await LoadDatabases();
+            // Wait for splash screen to finish (2 seconds) before initializing particles
+            await Task.Delay(2100);
+            await JSRuntime.InvokeVoidAsync("initParticles");
         }
     }
 
     private async Task LoadDatabases()
     {
-        if (string.IsNullOrWhiteSpace(connectionModel.Server))
+        if (string.IsNullOrWhiteSpace(server))
         {
-            errorMessage = "Please enter a server name first.";
+            errorMessage = "Please enter a server name.";
             return;
         }
 
-        isLoadingDatabases = true;
+        isLoading = true;
         errorMessage = null;
-        
+        databases.Clear();
+
         try
         {
-            databases = await ConnectionService.GetDatabasesAsync(
-                connectionModel.Server,
-                connectionModel.Username,
-                connectionModel.Password,
-                connectionModel.UseWindowsAuth
-            );
+            databases = await ConnectionService.GetDatabasesAsync(server, username, password, useWindowsAuth);
+            if (!databases.Any())
+            {
+                errorMessage = "No databases found or access denied.";
+            }
+            else
+            {
+                // Auto-select first if not set
+                if (string.IsNullOrEmpty(database)) database = databases.First();
+            }
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            errorMessage = $"Error loading databases: {ex.Message}";
         }
         finally
         {
-            isLoadingDatabases = false;
+            isLoading = false;
         }
     }
 
-    private async Task HandleConnect()
+    private async Task Connect()
     {
-        if (string.IsNullOrWhiteSpace(connectionModel.Database))
+        if (string.IsNullOrWhiteSpace(server))
         {
-            errorMessage = "Please select a database.";
+            errorMessage = "Please enter a server name.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(database))
+        {
+            errorMessage = "Please enter a database name.";
             return;
         }
 
-        isConnecting = true;
+        isLoading = true;
         errorMessage = null;
 
         try
         {
             var success = await ConnectionService.TestConnectionAsync(
-                connectionModel.Server,
-                connectionModel.Database,
-                connectionModel.Username,
-                connectionModel.Password,
-                connectionModel.UseWindowsAuth
+                server,
+                database,
+                username,
+                password,
+                useWindowsAuth
             );
 
             if (success)
             {
                 // Store connection info in session/localStorage
-                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbServer", connectionModel.Server);
-                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbDatabase", connectionModel.Database);
-                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUsername", connectionModel.Username ?? "");
-                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbPassword", connectionModel.Password ?? "");
-                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUseWindowsAuth", connectionModel.UseWindowsAuth.ToString());
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbServer", server);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbDatabase", database);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUsername", username ?? "");
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbPassword", password ?? "");
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dbUseWindowsAuth", useWindowsAuth.ToString());
                 
                 Navigation.NavigateTo("/diagram");
             }
@@ -199,18 +213,19 @@
         }
         finally
         {
-            isConnecting = false;
+            isLoading = false;
         }
     }
 
-    public class ConnectionModel
+    private async Task LoadDemoDatabase()
     {
-        [Required(ErrorMessage = "Server name is required")]
-        public string Server { get; set; } = "localhost";
-        public string? Username { get; set; }
-        public string? Password { get; set; }
-        public bool UseWindowsAuth { get; set; } = true;
-        public string? Database { get; set; }
+        server = "yalewebsql.database.windows.net";
+        database = "Yaleweb";
+        username = "Yaleadmin";
+        password = "Enclosures23@";
+        useWindowsAuth = false;
+        
+        // Auto-connect after loading demo credentials
+        await Connect();
     }
 }
-

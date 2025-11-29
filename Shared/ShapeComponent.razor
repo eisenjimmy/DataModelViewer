@@ -1,0 +1,32 @@
+@using SchemaDiagramViewer.Models
+
+<div class="absolute cursor-move shape-box @(IsSelected ? "selected" : "")"
+     style="left: @(Shape.X)px; top: @(Shape.Y)px; width: @(Shape.Width)px; height: @(Shape.Height)px; border: @(Shape.BorderWidth)px solid @Shape.BorderColor; background-color: @Shape.FillColor; border-radius: 4px; z-index: @Shape.ZIndex;"
+     data-shape-id="@Shape.Id"
+     @oncontextmenu="HandleContextMenu"
+     @oncontextmenu:preventDefault
+     @oncontextmenu:stopPropagation
+     @onclick="OnClick"
+     @onclick:stopPropagation>
+    <div class="resize-handle se" data-handle="se" style="position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; background: transparent;"></div>
+</div>
+
+@code {
+    [Parameter] public DiagramShape Shape { get; set; } = new();
+    [Parameter] public EventCallback<DiagramShape> OnShapeClick { get; set; }
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnContextMenu { get; set; }
+    
+    private async Task OnClick()
+    {
+        await OnShapeClick.InvokeAsync(Shape);
+    }
+
+    private async Task HandleContextMenu(MouseEventArgs e)
+    {
+        if (OnContextMenu.HasDelegate)
+        {
+            await OnContextMenu.InvokeAsync(e);
+        }
+    }
+}

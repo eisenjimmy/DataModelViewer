@@ -1,8 +1,23 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using SchemaDiagramViewer;
 using SchemaDiagramViewer.Services;
 using ElectronNET.API;
 using ElectronNET.API.Entities;
+
+// Hide console window when running under Electron
+if (HybridSupport.IsElectronActive)
+{
+    try
+    {
+        var handle = NativeMethods.GetConsoleWindow();
+        if (handle != IntPtr.Zero)
+        {
+            NativeMethods.ShowWindow(handle, 0); // SW_HIDE = 0
+        }
+    }
+    catch { /* Ignore if fails */ }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,22 +68,28 @@ app.MapFallbackToPage("/_Host");
 // Create the window on a background task so startup continues quickly.
 if (HybridSupport.IsElectronActive)
 {
-    Task.Run(async () =>
+    _ = Task.Run(async () =>
     {
+        // Wait a moment for the server to start
+        await Task.Delay(500);
+        
         var options = new BrowserWindowOptions
         {
             Width = 1200,
             Height = 900,
             Show = true,
-            AutoHideMenuBar = true
+            AutoHideMenuBar = true,
+            WebPreferences = new WebPreferences
+            {
+                NodeIntegration = false,
+                ContextIsolation = true
+            }
         };
 
-        var window = await Electron.WindowManager.CreateWindowAsync(options);
-
-        // If you set UseUrls above, Electron will open the app automatically.
+        var window = await Electron.WindowManager.CreateWindowAsync(options, "http://127.0.0.1:5000");
         window.SetTitle("Schema Diagram Viewer");
 
-        // Optional: close the app when the window is closed
+        // Close the app when the window is closed
         window.OnClosed += () => Electron.App.Quit();
     });
 }

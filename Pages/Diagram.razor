@@ -2,6 +2,7 @@
 @using SchemaDiagramViewer.Models
 @using SchemaDiagramViewer.Services
 @using Microsoft.Data.SqlClient
+@using Microsoft.AspNetCore.Components.Web
 @inject DatabaseConnectionService ConnectionService
 @inject SchemaReaderService SchemaReader
 @inject DiagramService DiagramService
@@ -16,165 +17,762 @@
 <style>
     /* Compact, tasteful toolbar */
     .toolbar {
-        display:flex;
-        align-items:center;
-        gap:8px;
-        padding:6px 10px;
-        background:white;
-        border-bottom:1px solid #E5E7EB;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: white;
+        border-bottom: 1px solid #E5E7EB;
         box-shadow: 0 1px 0 rgba(0,0,0,0.03);
-        font-size:0.95rem;
+        font-size: 0.95rem;
     }
 
-    .toolbar .group { display:flex; gap:6px; align-items:center; }
+        .toolbar .group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
 
     .toolbar-btn {
-        display:inline-flex;
-        align-items:center;
-        gap:8px;
-        padding:6px 8px;
-        color:#374151;
-        background:transparent;
-        border-radius:6px;
-        border:0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        color: #374151;
+        background: transparent;
+        border-radius: 6px;
+        border: 0;
     }
-    .toolbar-btn:hover { background:#F3F4F6; color:#111827; cursor:pointer; }
+    
+    :global(.dark) .toolbar-btn {
+        color: #f3f4f6;
+    }
+
+        .toolbar-btn:hover {
+            background: #F3F4F6;
+            color: #111827;
+            cursor: pointer;
+        }
 
     .toolbar-icon {
-        width:16px;
-        height:16px;
-        fill:#6B7280; /* gray */
-        flex-shrink:0;
+        width: 16px;
+        height: 16px;
+        fill: #6B7280; /* gray */
+        flex-shrink: 0;
     }
 
-    .toolbar-label { font-size:0.85rem; }
+    .toolbar-label {
+        font-size: 0.85rem;
+    }
 
     /* Modal */
     .modal-backdrop {
-        position:fixed;
-        inset:0;
-        background:rgba(0,0,0,0.45);
-        z-index:50;
-        display:flex;
-        align-items:center;
-        justify-content:center;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
+
     .modal {
-        background:white;
-        border-radius:8px;
-        width:520px;
-        max-width:calc(100% - 32px);
-        padding:16px;
-        box-shadow:0 10px 30px rgba(0,0,0,0.12);
-        z-index:60;
+        background: white;
+        border-radius: 8px;
+        width: 520px;
+        max-width: calc(100% - 32px);
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+        z-index: 60;
     }
-    .modal .row { display:flex; gap:8px; margin-bottom:8px; }
-    .modal label { font-size:12px; color:#374151; display:block; margin-bottom:4px; }
-    .modal input, .modal select { width:100%; padding:8px; border:1px solid #E5E7EB; border-radius:6px; }
-    .modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
-    .btn-primary { background:#0f62fe; color:white; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
-    .btn-secondary { background:#f3f4f6; color:#111827; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+
+        .modal .row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .modal label {
+            font-size: 12px;
+            color: #374151;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .modal input, .modal select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+        }
+
+        .modal .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+    .btn-primary {
+        background: #0f62fe;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 0;
+        cursor: pointer;
+    }
+
+    .btn-secondary {
+        background: #f3f4f6;
+        color: #111827;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 0;
+        cursor: pointer;
+    }
+
+    /* Rulers */
+    .ruler-h {
+        height: 20px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ruler-v {
+        width: 20px;
+        background: #f9fafb;
+        border-right: 1px solid #e5e7eb;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Selection Visual Feedback */
+    .selected {
+        outline: 2px solid #3b82f6 !important;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        z-index: 100 !important; /* Bring selected to front visually */
+    }
+
+    .ruler-marker {
+        position: absolute;
+        background: #3b82f6;
+        pointer-events: none;
+        z-index: 10;
+    }
+
+        .ruler-marker.horizontal {
+            width: 1px;
+            height: 100%;
+            top: 0;
+        }
+
+        .ruler-marker.vertical {
+            height: 1px;
+            width: 100%;
+            left: 0;
+        }
+
+    .ruler-tick {
+        position: absolute;
+        font-size: 9px;
+        color: #6b7280;
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 3px;
+        padding: 1px 3px;
+        font-family: ui-monospace, monospace;
+        font-weight: 500;
+    }
+    
+    :global(.dark) .ruler-tick {
+        background: #111827;
+        border: 1px solid #35373a !important;
+        color: #6b7280;
+    }
+
+    /* Context Menu */
+    .context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-radius: 6px;
+        padding: 4px 0;
+        z-index: 9999;
+        min-width: 160px;
+    }
+
+    .context-menu-item {
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #374151;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+        .context-menu-item:hover {
+            background: #f3f4f6;
+        }
+
+    .context-menu-separator {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 4px 0;
+    }
+
+    /* Page Break Lines */
+    .page-break-line {
+        position: absolute;
+        border: 2px dotted #dc2626;
+        pointer-events: none;
+        z-index: 5;
+        opacity: 0.8;
+    }
+    
+    .page-area {
+        position: absolute;
+        border: 2px dotted #dc2626;
+        pointer-events: none;
+        z-index: 4;
+        background: rgba(220, 38, 38, 0.02);
+        box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.1);
+    }
 </style>
 
-<div class="h-screen flex flex-col bg-gray-50">
-    <!-- Compact Toolbar -->
-    <div class="toolbar">
-        <div class="group">
-            <button @onclick="GoToConnection" class="toolbar-btn" title="Back">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span class="toolbar-label">Back</span>
+<div class="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <!-- Menu Bar -->
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 flex items-center px-2 py-1 gap-1" style="min-height: 40px;">
+        <!-- Sidebar Toggle -->
+        <button @onclick="ToggleSidebar" class="px-2 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Toggle Sidebar">
+            @if (isSidebarOpen)
+            {
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            }
+            else
+            {
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            }
+        </button>
+        
+        <!-- Search -->
+        <div class="relative ml-2">
+            <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <input type="text"
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search tables..."
+                   class="pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-48 transition-all dark:bg-gray-700 dark:text-gray-200" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button @onclick="() => searchTerm = string.Empty" class="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            }
+        </div>
+        
+        <!-- File Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("file")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                File
             </button>
-
-            <button @onclick="LoadSchema" class="toolbar-btn" title="Refresh">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span class="toolbar-label">Refresh</span>
-            </button>
+            @if (openMenu == "file")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[180px]">
+                    <button @onclick="() => { SaveDiagram(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke-width="2" /></svg>
+                        Save
+                    </button>
+                    <button @onclick="() => { LoadDiagram(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h5l2 3h11v9H3z" stroke-width="2" /></svg>
+                        Load
+                    </button>
+                    <button @onclick="() => { ExportPdf(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="2" /><path d="M14 2v6h6" stroke-width="2" /></svg>
+                        Export PDF
+                    </button>
+                    <div class="border-t border-gray-200 dark:border-gray-800 my-1"></div>
+                    <button @onclick="() => { GoToConnection(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12h16m0 0l-6-6m6 6l-6 6" stroke-width="2" stroke-linecap="round" /></svg>
+                        Reconnect
+                    </button>
+                </div>
+            }
         </div>
 
-        <div style="flex:1"></div>
-
-        <div class="group">
-            <button @onclick="SaveDiagram" class="toolbar-btn" title="Save">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 7h10v6H7z" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
-                <span class="toolbar-label">Save</span>
+        <!-- Insert Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("insert")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                Insert
             </button>
-
-            <button @onclick="LoadDiagram" class="toolbar-btn" title="Load">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h5l2 3h11v9H3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span class="toolbar-label">Load</span>
-            </button>
-
-            <button @onclick="ExportPdf" class="toolbar-btn" title="Export PDF">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-                <span class="toolbar-label">PDF</span>
-            </button>
-
-            <!-- open settings modal -->
-            <button @onclick="OpenSettingsModal" class="toolbar-btn" title="Export Settings">
-                <svg class="toolbar-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 2.28 18.3l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09c.67 0 1.22-.41 1.51-1a1.65 1.65 0 0 0-.33-1.82L4.04 6.7A2 2 0 1 1 6.88 3.87l.06.06c.48.48 1.2.57 1.82.33.58-.22 1.24-.22 1.82 0 .62.24 1.34.15 1.82-.33l.06-.06A2 2 0 1 1 17.12 6.7l-.06.06c-.48.48-.57 1.2-.33 1.82.22.58.22 1.24 0 1.82-.24.62-.15 1.34.33 1.82l.06.06A2 2 0 1 1 20.12 11h-.09c-.67 0-1.22.41-1.51 1-.22.58-.22 1.24 0 1.82z" stroke="currentColor" stroke-width="1" fill="none"/></svg>
-                <span class="toolbar-label">Settings</span>
-            </button>
+            @if (openMenu == "insert")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[180px]">
+                    <button @onclick="() => { AddLabel(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" stroke-width="2" /></svg>
+                        Label
+                    </button>
+                    <button @onclick="() => { AddShape(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2" /></svg>
+                        Rectangle
+                    </button>
+                </div>
+            }
         </div>
+
+        <!-- Refresh Button -->
+        <button @onclick="ConfirmRefresh" class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+            Refresh
+        </button>
+
+        <!-- Arrange Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("arrange")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                Arrange
+            </button>
+            @if (openMenu == "arrange")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[180px]">
+                    <button @onclick="() => { BringToFront(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count == 0 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count == 0)">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 8h8v8H8z" stroke-width="2" /><path d="M16 8V4H4v12h4" stroke-width="2" /></svg>
+                        Bring to Front
+                    </button>
+                    <button @onclick="() => { BringForward(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count == 0 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count == 0)">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 15l7-7 7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Bring Forward
+                    </button>
+                    <button @onclick="() => { SendBackward(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count == 0 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count == 0)">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Send Backward
+                    </button>
+                    <button @onclick="() => { SendToBack(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count == 0 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count == 0)">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 8h8v8H8z" stroke-width="2" /><path d="M16 16v4H4V8h4" stroke-width="2" /></svg>
+                        Send to Back
+                    </button>
+                </div>
+            }
+        </div>
+
+        <!-- Layout Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("layout")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                Layout
+            </button>
+            @if (openMenu == "layout")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[200px]">
+                    <div class="px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100">Alignment</div>
+                    <button @onclick='() => { AlignObjects("left"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Left
+                    </button>
+                    <button @onclick='() => { AlignObjects("center"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Center
+                    </button>
+                    <button @onclick='() => { AlignObjects("right"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Right
+                    </button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button @onclick='() => { AlignObjects("top"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Top
+                    </button>
+                    <button @onclick='() => { AlignObjects("middle"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Middle
+                    </button>
+                    <button @onclick='() => { AlignObjects("bottom"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 2 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 2)">
+                        Align Bottom
+                    </button>
+                    
+                    <div class="px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100 border-t mt-1">Distribution</div>
+                    <button @onclick='() => { DistributeObjects("horizontal"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 3 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 3)">
+                        Distribute Horizontally
+                    </button>
+                    <button @onclick='() => { DistributeObjects("vertical"); CloseMenus(); }' class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 @(selectedObjects.Count < 3 ? "opacity-50 cursor-not-allowed" : "")" disabled="@(selectedObjects.Count < 3)">
+                        Distribute Vertically
+                    </button>
+                </div>
+            }
+        </div>
+
+        <!-- Settings Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("settings")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                Settings
+            </button>
+            @if (openMenu == "settings")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[180px]">
+                    <button @onclick="() => { OpenSettingsModal(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" stroke-width="2" /><path d="M12 1v6m0 6v6M23 12h-6m-6 0H1" stroke-width="2" /></svg>
+                        Page Layout
+                    </button>
+                    <button @onclick="() => { ToggleDarkMode(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        @if (isDarkMode)
+                        {
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="5" stroke-width="2" /><path d="M12 1v2m0 18v2M23 12h-2M3 12H1m17.66-7.66l-1.42 1.42M6.34 17.66l-1.42 1.42m12.02 0l-1.42-1.42M6.34 6.34L4.92 4.92" stroke-width="2" /></svg>
+                            <span>Light Mode</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke-width="2" /></svg>
+                            <span>Dark Mode</span>
+                        }
+                    </button>
+                </div>
+            }
+        </div>
+        
+        <!-- View Menu -->
+        <div class="relative menu-item" style="z-index: 1000;">
+            <button @onclick='() => ToggleMenu("view")' class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                View
+            </button>
+            @if (openMenu == "view")
+            {
+                <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded shadow-lg z-[9999] min-w-[180px]">
+                    <button @onclick="() => { ToggleSidebar(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2" /><path d="M9 3v18" stroke-width="2" /></svg>
+                        @(isSidebarOpen ? "Hide Left Panel" : "Show Left Panel")
+                    </button>
+                    <button @onclick="() => { ToggleRightSidebar(); CloseMenus(); }" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2" /><path d="M15 3v18" stroke-width="2" /></svg>
+                        @(isRightSidebarOpen ? "Hide Right Panel" : "Show Right Panel")
+                    </button>
+                </div>
+            }
+        </div>
+
+        <div class="flex-1"></div>
+
     </div>
 
-    <!-- Diagram Canvas (unchanged) -->
-    <div class="flex-1 overflow-hidden relative" id="diagram-container">
-        <div class="absolute inset-0 overflow-auto bg-gray-50" style="background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px); background-size: 24px 24px;">
-            <svg id="relationships-svg" class="absolute inset-0 pointer-events-none" style="z-index: 1;">
-                @foreach (var rel in schema?.Relationships ?? new List<Relationship>())
-                {
-                    <line x1="0" y1="0" x2="0" y2="0" 
-                          stroke="#94a3b8" 
-                          stroke-width="1.5" 
-                          stroke-dasharray="4,4"
-                          marker-end="url(#arrowhead)"
-                          data-from="@rel.FromTable" 
-                          data-to="@rel.ToTable"
-                          class="relationship-line opacity-60" />
-                }
-                <defs>
-                    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                        <path d="M 0 0 L 8 4 L 0 8 Z" fill="#94a3b8" opacity="0.6" />
-                    </marker>
-                </defs>
-            </svg>
-            
-            <div id="diagram-items" class="relative" style="z-index: 2;">
-                @if (schema != null)
-                {
-                    @foreach (var table in schema.Tables)
-                    {
-                        <TableComponent Table="@table" />
-                    }
-                    @foreach (var view in schema.Views)
-                    {
-                        <ViewComponent View="@view" />
-                    }
-                }
-                else if (isLoading)
-                {
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="text-center">
-                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-office-blue mx-auto mb-4"></div>
-                            <p class="text-gray-600">Loading schema...</p>
-                        </div>
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Side Panel -->
+        <div class="@(isSidebarOpen ? "w-64" : "w-0") bg-white dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out z-20 shadow-sm overflow-hidden">
+            <div class="w-64 flex flex-col h-full">
+                <!-- Inner container to maintain width during transition -->
+                <div class="p-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Database Objects</h3>
+                    <div class="flex gap-2 mb-2">
+                        <button @onclick="ShowAll" class="text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-800 rounded hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors flex-1">
+                            Show All
+                        </button>
+                        <button @onclick="HideAll" class="text-xs px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-800 rounded hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors flex-1">
+                            Hide All
+                        </button>
                     </div>
-                }
-                else
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-2 space-y-4">
+                    @if (schema != null)
+                    {
+                        @foreach (var group in schema.Tables.Concat(schema.Views.Select(v => new Table { Schema = v.Schema, Name = v.Name, X = v.X, Y = v.Y })).GroupBy(t => t.Schema).OrderBy(g => g.Key))
+                        {
+                            <div>
+                                <div class="flex items-center gap-2 mb-1 px-2">
+                                    <span class="w-2 h-2 rounded-full @GetSchemaColorDot(group.Key)"></span>
+                                    <span class="text-xs font-bold text-gray-700 dark:text-gray-100">@group.Key</span>
+                                </div>
+                                <div class="space-y-0.5">
+                                    @foreach (var item in group.OrderBy(t => t.Name))
+                                    {
+                                        var fullName = $"{item.Schema}.{item.Name}";
+                                        var isVisible = !hiddenObjects.Contains(fullName);
+                                        var isView = schema.Views.Any(v => v.FullName == fullName);
+
+                                        <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer" @onclick="() => FocusObject(fullName)">
+                                            <button @onclick="() => ToggleVisibility(fullName)" @onclick:stopPropagation class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none">
+                                                @if (isVisible)
+                                                {
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                                }
+                                            </button>
+                                            <span class="text-xs truncate flex-1 @(isVisible ? "text-gray-600 dark:text-gray-300" : "text-gray-400 dark:text-gray-600 italic")">
+                                                @item.Name
+                                                @if (isView)
+                                                {
+                                                    <span class="text-[9px] ml-1 text-emerald-600 dark:text-emerald-500 border border-emerald-200 dark:border-emerald-800 rounded px-0.5">V</span>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Custom Objects Panel -->
+                <div class="p-3 border-t border-gray-200 dark:border-gray-800">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Custom Objects</h3>
+
+                    @if (schema != null)
+                    {
+                        @if (schema.Labels.Count > 0 || schema.Shapes.Count > 0)
+                        {
+                            <div class="space-y-0.5">
+                                @foreach (var label in schema.Labels)
+                                {
+                                    <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer">
+                                        <svg class="w-3.5 h-3.5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                                        <span class="text-xs truncate flex-1 text-gray-600 dark:text-gray-300">@label.Text</span>
+                                        <button @onclick="() => DeleteLabel(label.Id)" @onclick:stopPropagation class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                }
+                                @foreach (var shape in schema.Shapes)
+                                {
+                                    <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer">
+                                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2" /></svg>
+                                        <span class="text-xs truncate flex-1 text-gray-600 dark:text-gray-300">Rectangle</span>
+                                        <button @onclick="() => DeleteShape(shape.Id)" @onclick:stopPropagation class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-xs text-gray-400 dark:text-gray-500 italic px-2">No custom objects</p>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Diagram Canvas Area -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+            <!-- ... existing canvas code ... -->
+            <!-- Top Ruler -->
+            <div class="ruler-h flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800" id="ruler-h">
+                @for (int i = 0; i < 5000; i += 100)
                 {
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="text-center">
-                            <p class="text-gray-600 mb-4">No schema loaded. Please connect to a database.</p>
-                            <button @onclick="GoToConnection" class="px-4 py-2 bg-office-blue text-white rounded hover:bg-blue-600">
-                                Connect to Database
-                            </button>
-                        </div>
-                    </div>
+                    <div class="ruler-tick" style="left: @(i + 20)px; top: 0; height: 100%; border-left: 1px solid #e5e7eb; padding-left: 2px;">@i</div>
                 }
+                <div class="ruler-marker horizontal" style="left: @(mouseX)px;"></div>
+            </div>
+
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Left ruler -->
+                <div class="ruler-v flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-800" id="ruler-v">
+                    @for (int i = 0; i < 5000; i += 100)
+                    {
+                        <div class="ruler-tick" style="top: @(i)px; left: 0; width: 100%; border-top: 1px solid #e5e7eb; padding-top: 2px;">
+                            <span class="block transform -rotate-90 origin-top-left translate-y-full ml-1">@i</span>
+                        </div>
+                    }
+                    <div class="ruler-marker vertical" style="top: @(mouseY)px;"></div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="flex-1 overflow-auto relative bg-gray-100 dark:bg-gray-900" id="diagram-viewport" @onmousemove="OnMouseMove">
+                    <div id="diagram-container" class="absolute origin-top-left"
+                         style="width:5000px; height:5000px; background-image: radial-gradient(circle, @(isDarkMode ? "#4b5563" : "#d1d5db") 1px, transparent 1px); background-size: 24px 24px;">
+
+                        <div id="particles-js" class="absolute inset-0 pointer-events-none" style="z-index:0;"></div>
+
+                        @if (viewMode == "Print")
+                        {
+                            var w = ExportSettings.Settings.WidthInches * 96;
+                            var h = ExportSettings.Settings.HeightInches * 96;
+                            var gap = 20; // Gap between pages
+
+                            @* Draw page areas with gaps *@
+                            @for (int row = 0; row < 3; row++)
+                            {
+                                @for (int col = 0; col < 3; col++)
+                                {
+                                    var x = col * (w + gap);
+                                    var y = row * (h + gap);
+                                    <div class="page-area" style="left:@(x)px; top:@(y)px; width:@(w)px; height:@(h)px;"></div>
+                                }
+                            }
+                        }
+
+                        <svg id="relationships-svg" class="absolute inset-0 pointer-events-none" style="z-index:1;">
+                            <defs>
+                                <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                                    <path d="M 0 0 L 8 4 L 0 8 Z" fill="#94a3b8" opacity="0.6" />
+                                </marker>
+                            </defs>
+
+                            @foreach (var rel in schema?.Relationships ?? Enumerable.Empty<Relationship>())
+                            {
+                                if (!hiddenObjects.Contains(rel.FromTable) && !hiddenObjects.Contains(rel.ToTable))
+                                {
+                                    <line x1="0" y1="0" x2="0" y2="0"
+                                          stroke="@(isDarkMode ? "#4b5563" : "#94a3b8")"
+                                          stroke-width="1.5"
+                                          stroke-dasharray="4,4"
+                                          marker-end="url(#arrowhead)"
+                                          data-from="@rel.FromTable"
+                                          data-to="@rel.ToTable"
+                                          class="relationship-line opacity-60" />
+                                }
+                            }
+                        </svg>
+
+                        <div id="diagram-items" class="relative" style="z-index:2;">
+                            @if (schema != null)
+                            {
+                                @foreach (var table in schema.Tables)
+                                {
+                                    if (!hiddenObjects.Contains(table.FullName))
+                                    {
+                                        <TableComponent Table="table"
+                                              IsSelected="@IsObjectSelected(table.FullName)"
+                                              OnContextMenu="@(e => ShowContextMenu(e, table.FullName, "Table"))" />
+                                    }
+                                }
+
+                                @foreach (var view in schema.Views)
+                                {
+                                    if (!hiddenObjects.Contains(view.FullName))
+                                    {
+                                        <ViewComponent View="@view"
+                                             IsSelected="@IsObjectSelected(view.FullName)"
+                                             OnContextMenu="@(e => ShowContextMenu(e, view.FullName, "View"))"
+                                             CssClass="@GetViewClass(view)" HeaderClass="bg-gradient-to-r from-emerald-600 to-emerald-700" />
+                                    }
+                                }
+
+                                @foreach (var shape in schema.Shapes)
+                                {
+                                    <ShapeComponent Shape="@shape"
+                                           IsSelected="@IsObjectSelected(shape.Id)"
+                                           OnContextMenu="@(e => ShowContextMenu(e, shape.Id, "Shape"))"
+                                           OnShapeClick="OnShapeClick" />
+                                }
+
+                                @foreach (var label in schema.Labels)
+                                {
+                                    <LabelComponent Label="@label"
+                                           IsSelected="@IsObjectSelected(label.Id)"
+                                           OnContextMenu="@(e => ShowContextMenu(e, label.Id, "Label"))"
+                                           OnLabelChanged="OnLabelChanged" />
+                                }
+                            }
+                            else if (isLoading)
+                            {
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-office-blue mx-auto mb-4"></div>
+                                        <p class="text-gray-600">Loading schema...</p>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <p class="text-gray-600 mb-4">No schema loaded. Please connect to a database.</p>
+                                        <button @onclick="GoToConnection" class="px-4 py-2 bg-office-blue text-white rounded hover:bg-blue-600">
+                                            Connect to Database
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div> <!-- diagram-items -->
+
+                    </div> <!-- diagram-container -->
+                </div> <!-- diagram-viewport inner -->
+            </div> <!-- flex-1 flex overflow-hidden -->
+            <!-- Footer Status Bar -->
+    <div class="h-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex items-center px-2 text-xs text-gray-500 dark:text-gray-400 select-none z-30">
+        <div class="flex-1 flex gap-4">
+            <span>@schema?.Tables.Count tables</span>
+            <span>@schema?.Views.Count views</span>
+            <span>@schema?.Relationships.Count relationships</span>
+            @if (selectedObjects.Count > 0)
+            {
+                <span class="font-semibold text-blue-600 dark:text-blue-400">
+                    @if (selectedObjects.Count == 1)
+                    {
+                        <span>Selected: @selectedObjectId (@selectedObjectType) @if (GetSelectedZIndex() is int z) { <span>(Z: @z)</span> }</span>
+                    }
+                    else
+                    {
+                        <span>@selectedObjects.Count objects selected</span>
+                    }
+                </span>
+            }
+        </div>
+        <div class="flex gap-4">
+            <span>Zoom: @(Math.Round(currentZoom * 100))%</span>
+            <span>Mouse: @Math.Round(mouseX), @Math.Round(mouseY)</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded p-0.5">
+                <button @onclick='() => viewMode = "Design"' class="px-2 py-0.5 rounded @(viewMode == "Design" ? "bg-white dark:bg-gray-600 shadow text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-600")">Design</button>
+                <button @onclick='() => viewMode = "Print"' class="px-2 py-0.5 rounded @(viewMode == "Print" ? "bg-white dark:bg-gray-600 shadow text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-600")">Print</button>
             </div>
         </div>
     </div>
-</div>
+        </div> <!-- Diagram Canvas Area wrapper -->
+
+        <!-- Right Panel -->
+        <div class="@(isRightSidebarOpen ? "w-64" : "w-0") bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out z-20 shadow-sm overflow-hidden">
+            <div class="w-64 flex flex-col h-full">
+                <div class="p-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Procedures & Functions</h3>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 space-y-4">
+                    @if (schema != null)
+                    {
+                        @if (schema.StoredProcedures.Any())
+                        {
+                            <div>
+                                <div class="flex items-center gap-2 mb-1 px-2">
+                                    <span class="text-xs font-bold text-gray-700 dark:text-gray-100">Stored Procedures</span>
+                                </div>
+                                <div class="space-y-0.5">
+                                    @foreach (var sp in schema.StoredProcedures)
+                                    {
+                                        <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer">
+                                            <svg class="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                                            <span class="text-xs truncate flex-1 text-gray-600 dark:text-gray-300">@sp.FullName</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        @if (schema.Functions.Any())
+                        {
+                            <div>
+                                <div class="flex items-center gap-2 mb-1 px-2">
+                                    <span class="text-xs font-bold text-gray-700 dark:text-gray-100">Functions</span>
+                                </div>
+                                <div class="space-y-0.5">
+                                    @foreach (var func in schema.Functions)
+                                    {
+                                        <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 group cursor-pointer">
+                                            <svg class="w-3.5 h-3.5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                                            <span class="text-xs truncate flex-1 text-gray-600 dark:text-gray-300">@func.FullName</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div> <!-- main flex container -->
+</div> <!-- root -->
 
 <InputFile OnChange="HandleFileSelected" accept=".diagram" class="hidden" id="diagram-file-input" />
 
@@ -183,18 +781,16 @@
     <div class="modal-backdrop" @onclick="CloseSettingsModal">
         <div class="modal" @onclick:stopPropagation>
             <h3 style="margin:0 0 8px 0">PDF Export Settings</h3>
-
             <div class="row">
                 <div style="flex:1">
                     <label>Preset</label>
-                    <select @bind="modalPreset">
+                    <select @bind="modalPreset" @bind:after="OnPresetChanged">
                         <option value="CP Custom">CP Custom (32 x 36)</option>
                         <option value="Letter">Letter (8 x 11.5)</option>
                         <option value="Custom">Custom</option>
                     </select>
                 </div>
             </div>
-
             <div class="row">
                 <div style="flex:1">
                     <label>Width (in)</label>
@@ -205,19 +801,33 @@
                     <input type="number" step="0.1" @bind="modalHeight" />
                 </div>
             </div>
-
             <div class="row">
                 <div style="flex:1">
                     <label>Document name</label>
                     <input @bind="modalDocName" />
                 </div>
             </div>
-
             <div class="actions">
                 <button class="btn-secondary" @onclick="CloseSettingsModal">Cancel</button>
                 <button class="btn-primary" @onclick="SaveSettings">Save</button>
             </div>
         </div>
+    </div>
+}
+
+@if (showContextMenu)
+{
+    <div class="context-menu" style="left:@(contextMenuX)px; top:@(contextMenuY)px;">
+        <div class="px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100">
+            @contextMenuTargetId
+            @if (GetContextTargetZIndex() is int z) { <span class="ml-1 text-gray-400 font-normal">(Z: @z)</span> }
+        </div>
+        <div class="context-menu-item" @onclick="BringToFront">Bring to Front</div>
+        <div class="context-menu-item" @onclick="BringForward">Bring Forward</div>
+        <div class="context-menu-item" @onclick="SendBackward">Send Backward</div>
+        <div class="context-menu-item" @onclick="SendToBack">Send to Back</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item text-red-600" @onclick="DeleteObject">Delete</div>
     </div>
 }
 
@@ -233,27 +843,146 @@
     private float modalHeight = 36f;
     private string modalDocName = "Data Model";
 
+    // Search state
+    private string searchTerm = "";
+
+    // Dark mode state
+    private bool isDarkMode = false;
+
+    // Visibility state
+    private HashSet<string> hiddenObjects = new();
+    private bool isSidebarOpen = true;
+    private bool isRightSidebarOpen = true;
+    private string openMenu = "";
+
+    // Canvas / UI state (added)
+    private double mouseX = 0;
+    private double mouseY = 0;
+    private double currentZoom = 1.0;
+    private string viewMode = "Design";
+
+    // Context menu state
+    private bool showContextMenu = false;
+    private double contextMenuX = 0;
+    private double contextMenuY = 0;
+    private string contextMenuTargetId = "";
+    private string contextMenuTargetType = "";
+
+    // Selection state
+    private HashSet<(string Id, string Type)> selectedObjects = new();
+    // Backward compatibility helpers (if needed, or just for convenience)
+    private string selectedObjectId => selectedObjects.FirstOrDefault().Id ?? "";
+    private string selectedObjectType => selectedObjects.FirstOrDefault().Type ?? "";
+
+    [JSInvokable]
+    public void SelectObject(string id, string type, bool toggle)
+    {
+        if (toggle)
+        {
+            if (selectedObjects.Contains((id, type)))
+            {
+                selectedObjects.Remove((id, type));
+            }
+            else
+            {
+                selectedObjects.Add((id, type));
+            }
+        }
+        else
+        {
+            selectedObjects.Clear();
+            selectedObjects.Add((id, type));
+        }
+        showContextMenu = false;
+        openMenu = "";
+        StateHasChanged();
+    }
+
+    private LayoutItem? GetLayoutItem(string id, string type)
+    {
+        if (schema == null) return null;
+        
+        if (type == "Table" || type == "table")
+        {
+            var t = schema.Tables.FirstOrDefault(x => x.FullName == id);
+            if (t != null) return new LayoutItem { Id = id, Type = type, X = t.X, Y = t.Y, Width = 220, Height = 200 };
+        }
+        else if (type == "View" || type == "view")
+        {
+            var v = schema.Views.FirstOrDefault(x => x.FullName == id);
+            if (v != null) return new LayoutItem { Id = id, Type = type, X = v.X, Y = v.Y, Width = 220, Height = 200 };
+        }
+        else if (type == "Shape" || type == "shape")
+        {
+            var s = schema.Shapes.FirstOrDefault(x => x.Id == id);
+            if (s != null) return new LayoutItem { Id = id, Type = type, X = s.X, Y = s.Y, Width = s.Width, Height = s.Height };
+        }
+        else if (type == "Label" || type == "label")
+        {
+            var l = schema.Labels.FirstOrDefault(x => x.Id == id);
+            if (l != null) return new LayoutItem { Id = id, Type = type, X = l.X, Y = l.Y, Width = l.Width, Height = l.Height };
+        }
+        return null;
+    }
+
+    private void UpdateLayoutItem(LayoutItem item)
+    {
+        if (schema == null) return;
+
+        if (item.Type == "Table" || item.Type == "table")
+        {
+            var t = schema.Tables.FirstOrDefault(x => x.FullName == item.Id);
+            if (t != null) { t.X = item.X; t.Y = item.Y; }
+        }
+        else if (item.Type == "View" || item.Type == "view")
+        {
+            var v = schema.Views.FirstOrDefault(x => x.FullName == item.Id);
+            if (v != null) { v.X = item.X; v.Y = item.Y; }
+        }
+        else if (item.Type == "Shape" || item.Type == "shape")
+        {
+            var s = schema.Shapes.FirstOrDefault(x => x.Id == item.Id);
+            if (s != null) { s.X = item.X; s.Y = item.Y; }
+        }
+        else if (item.Type == "Label" || item.Type == "label")
+        {
+            var l = schema.Labels.FirstOrDefault(x => x.Id == item.Id);
+            if (l != null) { l.X = item.X; l.Y = item.Y; }
+        }
+    }
+
+    [JSInvokable]
+    public void DeselectAll()
+    {
+        selectedObjects.Clear();
+        showContextMenu = false;
+        openMenu = "";
+        StateHasChanged();
+    }
+
+    private bool IsObjectSelected(string id)
+    {
+        return selectedObjects.Any(x => x.Id == id);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            if (dotNetRef != null)
-            {
-                await JSRuntime.InvokeVoidAsync("setDotNetRef", dotNetRef);
-            }
+            dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setDotNetRef", dotNetRef);
             await LoadSchema();
         }
-        
         if (schema != null)
         {
-            await Task.Delay(100); // Wait for DOM to update
+            await Task.Delay(100);
             await UpdateRelationshipLines();
         }
     }
 
-    protected override void OnInitialized()
+    public async ValueTask DisposeAsync()
     {
-        dotNetRef = DotNetObjectReference.Create(this);
+        dotNetRef?.Dispose();
     }
 
     private void OpenSettingsModal()
@@ -269,6 +998,21 @@
     private void CloseSettingsModal()
     {
         showSettingsModal = false;
+    }
+    
+    private void OnPresetChanged()
+    {
+        if (modalPreset == "CP Custom")
+        {
+            modalWidth = 32f;
+            modalHeight = 36f;
+        }
+        else if (modalPreset == "Letter")
+        {
+            modalWidth = 8.5f;
+            modalHeight = 11f;
+        }
+        // For "Custom", don't change the values
     }
 
     private void SaveSettings()
@@ -300,12 +1044,28 @@
                 return;
             }
 
-            var connection = ConnectionService.CreateConnection(server, database, 
+            var connection = ConnectionService.CreateConnection(server, database,
                 string.IsNullOrEmpty(username) ? null : username,
                 string.IsNullOrEmpty(password) ? null : password,
                 useWindowsAuth);
 
             schema = await SchemaReader.ReadSchemaAsync(connection);
+
+            // Auto-snap all positions to grid
+            if (schema != null)
+            {
+                const int gridSize = 20;
+                foreach (var table in schema.Tables)
+                {
+                    table.X = Math.Round(table.X / gridSize) * gridSize;
+                    table.Y = Math.Round(table.Y / gridSize) * gridSize;
+                }
+                foreach (var view in schema.Views)
+                {
+                    view.X = Math.Round(view.X / gridSize) * gridSize;
+                    view.Y = Math.Round(view.Y / gridSize) * gridSize;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -339,7 +1099,7 @@
             using var stream = e.File.OpenReadStream();
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
-            
+
             schema = DiagramService.DeserializeDiagram(content);
             await UpdateRelationshipLines();
             StateHasChanged();
@@ -414,9 +1174,549 @@
         }
     }
 
-    public async ValueTask DisposeAsync()
+    [JSInvokable]
+    public void UpdateLabelPosition(string labelId, double x, double y)
     {
-        dotNetRef?.Dispose();
+        if (schema != null)
+        {
+            var label = schema.Labels.FirstOrDefault(l => l.Id == labelId);
+            if (label != null)
+            {
+                label.X = x;
+                label.Y = y;
+            }
+        }
+    }
+
+    private void AddLabel()
+    {
+        if (schema == null) return;
+
+        var label = new DiagramLabel
+        {
+            Text = "New Label",
+            X = 100,
+            Y = 100,
+            Color = "bg-yellow-100",
+            ZIndex = 1000 // Highest level
+        };
+        schema.Labels.Add(label);
+    }
+
+    private void OnLabelChanged(DiagramLabel label)
+    {
+    }
+
+    private void AddShape()
+    {
+        if (schema == null) return;
+
+        var shape = new DiagramShape
+        {
+            X = 100,
+            Y = 100,
+            Width = 200,
+            Height = 100,
+            BorderColor = "#3b82f6",
+            FillColor = "transparent",
+            BorderWidth = 2,
+            ZIndex = 0 // Behind tables (default 10)
+        };
+        schema.Shapes.Add(shape);
+    }
+
+    [JSInvokable]
+    public void UpdateShapePosition(string shapeId, double x, double y)
+    {
+        if (schema != null)
+        {
+            var shape = schema.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            if (shape != null)
+            {
+                shape.X = x;
+                shape.Y = y;
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateShapeSize(string shapeId, double width, double height)
+    {
+        if (schema != null)
+        {
+            var shape = schema.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            if (shape != null)
+            {
+                shape.Width = width;
+                shape.Height = height;
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateLabelSize(string labelId, double width, double height)
+    {
+        if (schema != null)
+        {
+            var label = schema.Labels.FirstOrDefault(l => l.Id == labelId);
+            if (label != null)
+            {
+                label.Width = width;
+                label.Height = height;
+            }
+        }
+    }
+
+    private void OnShapeClick(DiagramShape shape) { }
+
+    private void DeleteLabel(string labelId)
+    {
+        if (schema != null)
+        {
+            var label = schema.Labels.FirstOrDefault(l => l.Id == labelId);
+            if (label != null)
+            {
+                schema.Labels.Remove(label);
+            }
+        }
+    }
+
+    private void DeleteShape(string shapeId)
+    {
+        if (schema != null)
+        {
+            var shape = schema.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            if (shape != null)
+            {
+                schema.Shapes.Remove(shape);
+            }
+        }
+    }
+
+    private string GetTableClass(Table table)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm)) return "";
+
+        return table.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            ? "highlighted"
+            : "dimmed";
+    }
+
+    private string GetViewClass(View view)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm)) return "";
+
+        return view.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            ? "highlighted"
+            : "dimmed";
+    }
+
+    private readonly string[] schemaColors = new[]
+    {
+        "bg-gradient-to-r from-blue-600 to-blue-700",
+        "bg-gradient-to-r from-emerald-600 to-emerald-700",
+        "bg-gradient-to-r from-purple-600 to-purple-700",
+        "bg-gradient-to-r from-amber-600 to-amber-700",
+        "bg-gradient-to-r from-rose-600 to-rose-700",
+        "bg-gradient-to-r from-cyan-600 to-cyan-700",
+        "bg-gradient-to-r from-indigo-600 to-indigo-700",
+        "bg-gradient-to-r from-orange-600 to-orange-700"
+    };
+
+    private string GetSchemaClass(string schemaName)
+    {
+        if (string.IsNullOrEmpty(schemaName)) return schemaColors[0];
+        int hash = Math.Abs(schemaName.GetHashCode());
+        return schemaColors[hash % schemaColors.Length];
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        isDarkMode = !isDarkMode;
+        await JSRuntime.InvokeVoidAsync("toggleDarkMode", isDarkMode);
+    }
+
+    private void ToggleVisibility(string fullName)
+    {
+        if (hiddenObjects.Contains(fullName))
+        {
+            hiddenObjects.Remove(fullName);
+        }
+        else
+        {
+            hiddenObjects.Add(fullName);
+        }
+
+        // Need to update lines after visibility change
+        InvokeAsync(async () =>
+        {
+            await Task.Delay(50); // Allow DOM to update
+            await UpdateRelationshipLines();
+        });
+    }
+
+    private void ShowAll()
+    {
+        hiddenObjects.Clear();
+        InvokeAsync(async () =>
+        {
+            await Task.Delay(50);
+            await UpdateRelationshipLines();
+        });
+    }
+
+    private void HideAll()
+    {
+        if (schema == null) return;
+
+        foreach (var t in schema.Tables) hiddenObjects.Add(t.FullName);
+        foreach (var v in schema.Views) hiddenObjects.Add(v.FullName);
+
+        StateHasChanged();
+    }
+
+    private async Task FocusObject(string fullName)
+    {
+        // If hidden, show it
+        if (hiddenObjects.Contains(fullName))
+        {
+            hiddenObjects.Remove(fullName);
+            StateHasChanged();
+            await Task.Delay(50);
+        }
+
+        // Use the search term logic to highlight
+        searchTerm = fullName;
+
+        // Also center view? (Optional enhancement for later)
+
+        await UpdateRelationshipLines();
+    }
+
+    private string GetSchemaColorDot(string schemaName)
+    {
+        // Extract the 'from-color-600' part to use as text color or bg color
+        var cls = GetSchemaClass(schemaName);
+        // Map gradient class to a simple bg color class for the dot
+        if (cls.Contains("blue")) return "bg-blue-600";
+        if (cls.Contains("emerald")) return "bg-emerald-600";
+        if (cls.Contains("purple")) return "bg-purple-600";
+        if (cls.Contains("amber")) return "bg-amber-600";
+        if (cls.Contains("rose")) return "bg-rose-600";
+        if (cls.Contains("cyan")) return "bg-cyan-600";
+        if (cls.Contains("indigo")) return "bg-indigo-600";
+        if (cls.Contains("orange")) return "bg-orange-600";
+        return "bg-gray-600";
+    }
+
+    private void CloseMenus()
+    {
+        openMenu = "";
+        showContextMenu = false;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        // refine ruler marker position relative to viewport and sidebar/header
+        var sidebarWidth = isSidebarOpen ? 256 : 0;
+        var headerHeight = 40; // approx
+        mouseX = Math.Max(0, e.ClientX - sidebarWidth - 20); // -20 for vertical ruler width
+        mouseY = Math.Max(0, e.ClientY - headerHeight - 20); // -20 for horizontal ruler height
+    }
+
+    private void ShowContextMenu(MouseEventArgs e, string id, string type)
+    {
+        contextMenuX = e.ClientX;
+        contextMenuY = e.ClientY;
+        contextMenuTargetId = id;
+        contextMenuTargetType = type;
+        showContextMenu = true;
+    }
+
+    private void ApplyLayering(string action)
+    {
+        if (schema == null) return;
+
+        // Determine targets
+        var targets = new List<(string Id, string Type)>();
+        if (showContextMenu && !string.IsNullOrEmpty(contextMenuTargetId))
+        {
+            targets.Add((contextMenuTargetId, contextMenuTargetType));
+        }
+        else
+        {
+            targets.AddRange(selectedObjects);
+        }
+
+        if (!targets.Any()) return;
+
+        foreach (var (targetId, targetType) in targets)
+        {
+            // Helper to get/set ZIndex
+            Action<int> setZ = null;
+            Func<int> getZ = null;
+
+            if (targetType == "Table" || targetType == "table")
+            {
+                var t = schema.Tables.FirstOrDefault(x => x.FullName == targetId);
+                if (t != null) { setZ = z => t.ZIndex = z; getZ = () => t.ZIndex; }
+            }
+            else if (targetType == "View" || targetType == "view")
+            {
+                var v = schema.Views.FirstOrDefault(x => x.FullName == targetId);
+                if (v != null) { setZ = z => v.ZIndex = z; getZ = () => v.ZIndex; }
+            }
+            else if (targetType == "Shape" || targetType == "shape")
+            {
+                var s = schema.Shapes.FirstOrDefault(x => x.Id == targetId);
+                if (s != null) { setZ = z => s.ZIndex = z; getZ = () => s.ZIndex; }
+            }
+            else if (targetType == "Label" || targetType == "label")
+            {
+                var l = schema.Labels.FirstOrDefault(x => x.Id == targetId);
+                if (l != null) { setZ = z => l.ZIndex = z; getZ = () => l.ZIndex; }
+            }
+
+            if (setZ == null || getZ == null) continue;
+
+            int currentZ = getZ();
+
+            switch (action)
+            {
+                case "front":
+                    int maxZ = 0;
+                    if (schema.Tables.Any()) maxZ = Math.Max(maxZ, schema.Tables.Max(x => x.ZIndex));
+                    if (schema.Views.Any()) maxZ = Math.Max(maxZ, schema.Views.Max(x => x.ZIndex));
+                    if (schema.Shapes.Any()) maxZ = Math.Max(maxZ, schema.Shapes.Max(x => x.ZIndex));
+                    if (schema.Labels.Any()) maxZ = Math.Max(maxZ, schema.Labels.Max(x => x.ZIndex));
+                    setZ(maxZ + 1);
+                    break;
+                case "back":
+                    setZ(0); 
+                    break;
+                case "forward":
+                    setZ(currentZ + 1);
+                    break;
+                case "backward":
+                    setZ(currentZ - 1);
+                    break;
+            }
+        }
+
+        showContextMenu = false;
+    }
+
+    private void BringToFront() => ApplyLayering("front");
+    private void BringForward() => ApplyLayering("forward");
+    private void SendBackward() => ApplyLayering("backward");
+    private void SendToBack() => ApplyLayering("back");
+
+    private void DeleteObject()
+    {
+        if (schema == null) return;
+
+        // Determine target
+        string targetId = showContextMenu ? contextMenuTargetId : selectedObjectId;
+        string targetType = showContextMenu ? contextMenuTargetType : selectedObjectType;
+
+        if (string.IsNullOrEmpty(targetId)) return;
+
+        if (targetType == "Shape" || targetType == "shape") DeleteShape(targetId);
+        else if (targetType == "Label" || targetType == "label") DeleteLabel(targetId);
+        else if (targetType == "Table" || targetType == "table" || targetType == "View" || targetType == "view") ToggleVisibility(targetId);
+
+        showContextMenu = false;
+    }
+
+
+    private void ToggleSidebar()
+    {
+        isSidebarOpen = !isSidebarOpen;
+        InvokeAsync(async () =>
+        {
+            await Task.Delay(300); // Wait for transition
+            await UpdateRelationshipLines();
+        });
+    }
+
+    private void ToggleRightSidebar()
+    {
+        isRightSidebarOpen = !isRightSidebarOpen;
+        InvokeAsync(async () =>
+        {
+            await Task.Delay(300); // Wait for transition
+            await UpdateRelationshipLines();
+        });
+    }
+
+    // Added: toggle open/close for menus referenced in markup
+    private void ToggleMenu(string name)
+    {
+        if (openMenu == name)
+            openMenu = "";
+        else
+            openMenu = name;
+    }
+
+    // Added: simple confirmation for refresh
+    private async Task ConfirmRefresh()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Reload schema? Unsaved changes will be lost.");
+        if (confirmed)
+        {
+            await LoadSchema();
+        }
+    }
+
+    private void AlignObjects(string mode)
+    {
+        if (selectedObjects.Count < 2 || schema == null) return;
+
+        // 1. Collect selected items with their bounds
+        var items = new List<LayoutItem>();
+        foreach (var (id, type) in selectedObjects)
+        {
+            var item = GetLayoutItem(id, type);
+            if (item != null) items.Add(item);
+        }
+
+        if (items.Count < 2) return;
+
+        // 2. Calculate reference value
+        double targetVal = 0;
+        switch (mode)
+        {
+            case "left":
+                targetVal = items.Min(i => i.X);
+                break;
+            case "center":
+                var minX = items.Min(i => i.X);
+                var maxX = items.Max(i => i.X + i.Width);
+                targetVal = (minX + maxX) / 2;
+                break;
+            case "right":
+                targetVal = items.Max(i => i.X + i.Width);
+                break;
+            case "top":
+                targetVal = items.Min(i => i.Y);
+                break;
+            case "middle":
+                var minY = items.Min(i => i.Y);
+                var maxY = items.Max(i => i.Y + i.Height);
+                targetVal = (minY + maxY) / 2;
+                break;
+            case "bottom":
+                targetVal = items.Max(i => i.Y + i.Height);
+                break;
+        }
+
+        // 3. Apply alignment
+        foreach (var item in items)
+        {
+            switch (mode)
+            {
+                case "left": item.X = targetVal; break;
+                case "center": item.X = targetVal - (item.Width / 2); break;
+                case "right": item.X = targetVal - item.Width; break;
+                case "top": item.Y = targetVal; break;
+                case "middle": item.Y = targetVal - (item.Height / 2); break;
+                case "bottom": item.Y = targetVal - item.Height; break;
+            }
+            UpdateLayoutItem(item);
+        }
+    }
+
+    private void DistributeObjects(string mode)
+    {
+        if (selectedObjects.Count < 3 || schema == null) return;
+
+        var items = new List<LayoutItem>();
+        foreach (var (id, type) in selectedObjects)
+        {
+            var item = GetLayoutItem(id, type);
+            if (item != null) items.Add(item);
+        }
+
+        if (items.Count < 3) return;
+
+        if (mode == "horizontal")
+        {
+            items = items.OrderBy(i => i.X).ToList();
+            var minX = items.Min(i => i.X);
+            var maxRight = items.Max(i => i.X + i.Width);
+            var totalSpan = maxRight - minX;
+            var totalItemWidth = items.Sum(i => i.Width);
+            var gap = (totalSpan - totalItemWidth) / (items.Count - 1);
+
+            double currentX = minX;
+            foreach (var item in items)
+            {
+                item.X = currentX;
+                UpdateLayoutItem(item);
+                currentX += item.Width + gap;
+            }
+        }
+        else if (mode == "vertical")
+        {
+            items = items.OrderBy(i => i.Y).ToList();
+            var minY = items.Min(i => i.Y);
+            var maxBottom = items.Max(i => i.Y + i.Height);
+            var totalSpan = maxBottom - minY;
+            var totalItemHeight = items.Sum(i => i.Height);
+            var gap = (totalSpan - totalItemHeight) / (items.Count - 1);
+
+            double currentY = minY;
+            foreach (var item in items)
+            {
+                item.Y = currentY;
+                UpdateLayoutItem(item);
+                currentY += item.Height + gap;
+            }
+        }
+    }
+
+    private class LayoutItem
+    {
+        public string Id { get; set; } = "";
+        public string Type { get; set; } = "";
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+    }
+
+
+
+    private int? GetSelectedZIndex()
+    {
+        if (schema == null || selectedObjects.Count != 1) return null;
+        var (id, type) = selectedObjects.First();
+
+        if (type == "Table" || type == "table")
+            return schema.Tables.FirstOrDefault(t => t.FullName == id)?.ZIndex;
+        if (type == "View" || type == "view")
+            return schema.Views.FirstOrDefault(v => v.FullName == id)?.ZIndex;
+        if (type == "Shape" || type == "shape")
+            return schema.Shapes.FirstOrDefault(s => s.Id == id)?.ZIndex;
+        if (type == "Label" || type == "label")
+            return schema.Labels.FirstOrDefault(l => l.Id == id)?.ZIndex;
+            
+        return null;
+    }
+
+    private int? GetContextTargetZIndex()
+    {
+        if (schema == null || string.IsNullOrEmpty(contextMenuTargetId)) return null;
+
+        if (contextMenuTargetType == "Table" || contextMenuTargetType == "table")
+            return schema.Tables.FirstOrDefault(t => t.FullName == contextMenuTargetId)?.ZIndex;
+        if (contextMenuTargetType == "View" || contextMenuTargetType == "view")
+            return schema.Views.FirstOrDefault(v => v.FullName == contextMenuTargetId)?.ZIndex;
+        if (contextMenuTargetType == "Shape" || contextMenuTargetType == "shape")
+            return schema.Shapes.FirstOrDefault(s => s.Id == contextMenuTargetId)?.ZIndex;
+        if (contextMenuTargetType == "Label" || contextMenuTargetType == "label")
+            return schema.Labels.FirstOrDefault(l => l.Id == contextMenuTargetId)?.ZIndex;
+            
+        return null;
     }
 }
-

@@ -66,3 +66,26 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Diagram Highlighting & Dimming */
+.table-box, .view-box, .relationship-line {
+    transition: opacity 0.2s ease, box-shadow 0.2s ease, stroke 0.2s ease;
+}
+
+.dimmed {
+    opacity: 0.2 !important;
+    /* pointer-events: none; - Disabled to allow hovering over dimmed items to switch focus */
+}
+
+.highlighted {
+    opacity: 1 !important;
+    box-shadow: 0 0 0 2px #0f62fe, 0 10px 30px rgba(0,0,0,0.2) !important;
+    z-index: 100 !important;
+}
+
+/* Specific styles for SVG lines */
+.relationship-line.highlighted {
+    stroke: #0f62fe !important;
+    stroke-width: 2.5px !important;
+    opacity: 1 !important;
+}

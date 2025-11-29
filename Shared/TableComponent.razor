@@ -1,33 +1,36 @@
 @using SchemaDiagramViewer.Models
 @inject IJSRuntime JSRuntime
 
-<div class="table-box absolute cursor-move bg-white border border-gray-200 rounded shadow-sm hover:shadow transition-all duration-200"
-     style="left: @($"{Table.X}px"); top: @($"{Table.Y}px"); min-width: 200px; max-width: 260px; z-index: 10;"
+<div class="table-box absolute cursor-move bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm hover:shadow transition-all duration-200 @CssClass @(IsSelected ? "selected" : "")"
+     style="left: @($"{Table.X}px"); top: @($"{Table.Y}px"); min-width: 200px; max-width: 260px; z-index: @Table.ZIndex;"
      draggable="true"
      data-table-name="@Table.FullName"
+     @oncontextmenu="HandleContextMenu"
+     @oncontextmenu:preventDefault
+     @oncontextmenu:stopPropagation
      @ondragstart="HandleDragStart"
      @ondragend="HandleDragEnd"
      @onmousedown="HandleMouseDown">
     
     <!-- Compact Header -->
-    <div class="bg-gradient-to-r from-office-blue to-blue-600 text-white px-2.5 py-1.5 border-b border-blue-700">
+    <div class="@HeaderClass text-white px-2.5 py-1.5 border-b border-white/20">
         <div class="font-medium text-xs tracking-wide leading-tight">@Table.FullName</div>
         <div class="text-[10px] text-blue-100 font-light leading-tight">TABLE</div>
     </div>
     
     <!-- Compact Field List -->
-    <div class="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+    <div class="divide-y divide-gray-100 dark:divide-gray-700 max-h-80 overflow-y-auto">
         @foreach (var column in Table.Columns)
         {
-            <div class="px-2.5 py-0.5 hover:bg-gray-50 transition-colors">
+            <div class="px-2.5 py-0.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex-1 min-w-0 flex items-center gap-2">
                         @if (column.IsPrimaryKey)
                         {
                             <!-- Badge style PK to avoid clipping and improve legibility -->
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-office-blue text-white text-[10px] font-semibold leading-none" title="Primary Key">PK</span>
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-office-blue dark:bg-blue-600 text-white text-[10px] font-semibold leading-none" title="Primary Key">PK</span>
                         }
-                        <span class="text-xs font-medium text-gray-900 truncate @(column.IsPrimaryKey ? "text-office-blue" : "")">
+                        <span class="text-xs font-medium text-gray-900 dark:text-gray-100 truncate @(column.IsPrimaryKey ? "text-office-blue dark:text-blue-400" : "")">
                             @column.Name
                         </span>
                         @if (!column.IsNullable)
@@ -36,7 +39,7 @@
                         }
                     </div>
                     <div class="flex-shrink-0 text-right">
-                        <span class="text-[10px] text-gray-600 font-mono">
+                        <span class="text-[10px] text-gray-600 dark:text-gray-400 font-mono">
                             @column.DataType@(column.MaxLength.HasValue ? $"({column.MaxLength})" : (column.DataType.ToLower().Contains("char") || column.DataType.ToLower().Contains("binary") ? "(max)" : ""))
                         </span>
                     </div>
@@ -47,7 +50,16 @@
 </div>
 
 @code {
-    [Parameter] public Table Table { get; set; } = null!;
+    [Parameter]
+    public Table Table { get; set; } = new();
+    [Parameter]
+    public string CssClass { get; set; } = "";
+    [Parameter]
+    public string HeaderClass { get; set; } = "bg-blue-600";
+    [Parameter]
+    public bool IsSelected { get; set; }
+    [Parameter]
+    public EventCallback<MouseEventArgs> OnContextMenu { get; set; }
     
     private bool isDragging = false;
     private double startX, startY;
@@ -70,6 +82,14 @@
     private void HandleMouseDown(MouseEventArgs e)
     {
         // This will be handled by JavaScript for better drag experience
+    }
+
+    private async Task HandleContextMenu(MouseEventArgs e)
+    {
+        if (OnContextMenu.HasDelegate)
+        {
+            await OnContextMenu.InvokeAsync(e);
+        }
     }
 }
 
